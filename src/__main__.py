@@ -1,59 +1,28 @@
+from entropy import *
+from grid import *
+from ops import *
+from util import *
 from typing import List, Tuple, Callable
 import numpy as np
 import pygad
 import argparse
-from entropy import *
-import matplotlib.pyplot as plt
+from tqdm import tqdm
+import time
 
 
-class Grid:
-    def __init__(self, shape: Tuple[int, ...]):
-        self.grid = np.zeros(shape)
-        self.position = tuple(np.random.randint(0, s) for s in shape)
+shape = (10, 10)
+target_entropy = 7
 
-    def movePosition(self, deltas: List[float]):
-        new_pos = []
-        for i, (p, d, s) in enumerate(zip(self.position, deltas, self.grid.shape)):
-            new_p = int(p + d * s)  # Scale movement by dimension size
-            new_pos.append(min(max(0, new_p), s - 1))
-        self.position = tuple(new_pos)
-
-
-class GridOpParams:
-    def __init__(self, grid: Grid):
-        self.grid = grid
-
-
-class GridOp:
-    def __init__(self, func: Callable[..., None], param_count: int):
-        self.func = func
-        self.param_count = param_count
-
-
-class GridOpCall:
-    def __init__(self, op_idx: int, params: List[float]):
-        self.op_idx = op_idx
-        self.params = params
-
-
-def propagateFromPoint(params: GridOpParams, strength: float, value: float) -> None:
-    indices = np.indices(params.grid.grid.shape)
-    squared_diffs = sum(
-        (ind - pos) ** 2 for ind, pos in zip(indices, params.grid.position)
-    )
-    distances = np.sqrt(squared_diffs)
-    mask = distances < strength
-    params.grid.grid[mask] = value
-
-
-def moveRelative(params: GridOpParams, *deltas: float) -> None:
-    params.grid.movePosition(list(deltas))
-
-
-shape = (10, 10)  # Default shape
-target_entropy = 3  # Default target entropy
-
-GridOps = [GridOp(propagateFromPoint, 2), GridOp(moveRelative, len(shape))]
+GridOps = [
+    GridOp(propagateFromPoint, 2),
+    GridOp(moveRelative, len(shape)),
+    GridOp(line, 3),
+    GridOp(fill, 2),
+    GridOp(remove, 1),
+    GridOp(moduloFill, 3),
+    GridOp(rectangle, 2),
+    GridOp(repeatNthAgo, 2),
+]
 
 
 def decodeGenesToOperations(genes: List[float]) -> List[GridOpCall]:
@@ -90,49 +59,39 @@ def applyOperationSequence(
 
 
 def calcFitness(ga_instance, solution: list, solution_idx: int) -> float:
+    # Update the progress bar for solutions if it exists
+    if hasattr(ga_instance, "pbar_solutions"):
+        ga_instance.pbar_solutions.update(1)
+
     operations = decodeGenesToOperations(solution)
     pattern = applyOperationSequence(shape, operations)
     current_entropy = calcShannonEntropy(pattern)
 
-    # Penalize completely empty or full grids
     emptiness_penalty = -2.0 if np.all(pattern == 0) or np.all(pattern == 1) else 0.0
-
-    # Base score starts positive and decreases with distance from target
-    # This creates a gradient even when far from the target
     base_score = 10.0 - abs(target_entropy - current_entropy)
 
     return base_score + emptiness_penalty
 
 
-def displayGrid(grid: np.ndarray) -> None:
-    if grid.ndim == 2:
-        plt.figure(figsize=(8, 8))
-
-        # Use min/max of data for color scaling
-        vmin, vmax = np.min(grid), np.max(grid)
-
-        # If all values are the same, adjust range to prevent division by zero
-        if vmin == vmax:
-            vmin -= 0.5
-            vmax += 0.5
-
-        plt.imshow(grid, cmap="viridis", vmin=vmin, vmax=vmax)
-        plt.colorbar(label="Value")
-
-        # Add grid lines
-        plt.grid(True, which="major", color="black", linewidth=0.5)
-        plt.xticks(np.arange(-0.5, grid.shape[1], 1), [])
-        plt.yticks(np.arange(-0.5, grid.shape[0], 1), [])
-
-        plt.title(f"Grid Values: min={vmin:.2f}, max={vmax:.2f}")
-        plt.show()
-    else:
-        print("Grid shape:", grid.shape)
-
-
 def runGeneticAlgorithm(
     num_genes: int = 100, num_generations: int = 200, num_solutions: int = 100
 ) -> Tuple[np.ndarray, float]:
+    # Custom callback for generation completion
+    def on_generation(ga_instance):
+        ga_instance.pbar.update(1)
+        # Reset and close solutions progress bar
+        if hasattr(ga_instance, "pbar_solutions"):
+            ga_instance.pbar_solutions.close()
+        # Create new solutions progress bar for next generation
+        ga_instance.pbar_solutions = tqdm(
+            total=num_solutions,
+            desc=f"Solutions (gen {ga_instance.generations_completed + 1})",
+            leave=False,
+        )
+
+    # Create progress bar for generations
+    pbar = tqdm(total=num_generations, desc="Generations")
+
     ga_instance = pygad.GA(
         num_generations=num_generations,
         num_parents_mating=8,
@@ -146,12 +105,24 @@ def runGeneticAlgorithm(
         mutation_type="random",
         crossover_type="single_point",
         keep_parents=4,
+        on_generation=on_generation,
+    )
+
+    # Attach progress bar to instance so callback can access it
+    ga_instance.pbar = pbar
+    # Create initial solutions progress bar
+    ga_instance.pbar_solutions = tqdm(
+        total=num_solutions, desc="Solutions (gen 1)", leave=False
     )
 
     ga_instance.run()
 
-    print(f"Generation reached: {ga_instance.generations_completed}")
-    print(f"Best fitness achieved: {ga_instance.best_solution()[1]}")
+    # Clean up progress bars
+    pbar.close()
+    if hasattr(ga_instance, "pbar_solutions"):
+        ga_instance.pbar_solutions.close()
+
+    print(f"\nBest fitness achieved: {ga_instance.best_solution()[1]}")
 
     solution, solution_fitness, _ = ga_instance.best_solution()
     operations = decodeGenesToOperations(solution)
@@ -167,7 +138,7 @@ def main():
     )
     args = parser.parse_args()
 
-    pattern, fitness = runGeneticAlgorithm()
+    pattern, fitness = runGeneticAlgorithm(100, 500)
     print(f"Best fitness: {fitness}")
     displayGrid(pattern)
 
