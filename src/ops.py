@@ -13,6 +13,11 @@ def moveRelative(params: GridOpParams, *deltas: float) -> None:
     params.grid.movePosition(list(deltas))
 
 
+def moveToRandomPlace(params: GridOpParams) -> None:
+    new_position = [np.random.randint(0, s) for s in params.grid.grid.shape]
+    params.grid.movePosition(new_position)
+
+
 def propagateFromPoint(params: GridOpParams, strength: float, value: float) -> None:
     old_grid = params.grid.grid.copy()
 
@@ -56,7 +61,7 @@ def line(params: GridOpParams, direction: float, value: float, length: float) ->
     )
 
 
-def fill(params: GridOpParams, radius: float, value: float) -> None:
+def circularFill(params: GridOpParams, radius: float, value: float) -> None:
     old_grid = params.grid.grid.copy()
 
     indices = np.indices(params.grid.grid.shape)
@@ -66,6 +71,32 @@ def fill(params: GridOpParams, radius: float, value: float) -> None:
     distances = np.sqrt(squared_diffs)
     mask = distances < (radius * np.min(params.grid.grid.shape))
     params.grid.grid[mask] = value
+
+    changed_positions = list(zip(*np.where(old_grid != params.grid.grid)))
+    changed_values = [params.grid.grid[pos] for pos in changed_positions]
+    params.grid.recordChange(
+        changed_positions, changed_values, params.grid.position, params.grid.position
+    )
+
+
+def rectangularFill(params: GridOpParams, value: float, *sizes: float) -> None:
+    old_grid = params.grid.grid.copy()
+    ndims = len(params.grid.grid.shape)
+
+    # If fewer sizes provided than dimensions, repeat the last size
+    sizes = list(sizes)
+    while len(sizes) < ndims:
+        sizes.append(sizes[-1] if sizes else 0.5)
+
+    ranges = []
+    for pos, dim_size, size in zip(params.grid.position, params.grid.grid.shape, sizes):
+        # Convert size from 0-1 to actual grid units
+        actual_size = int(size * dim_size)
+        start = max(0, pos - actual_size)
+        end = min(dim_size, pos + actual_size + 1)
+        ranges.append(slice(start, end))
+
+    params.grid.grid[tuple(ranges)] = value
 
     changed_positions = list(zip(*np.where(old_grid != params.grid.grid)))
     changed_values = [params.grid.grid[pos] for pos in changed_positions]
@@ -211,3 +242,33 @@ def repeatLast(params: GridOpParams) -> None:
 
         if all(0 <= p < s for p, s in zip(new_pos, params.grid.grid.shape)):
             params.grid.grid[new_pos] = val
+
+
+def repeatLastN(params: GridOpParams, n: float) -> None:
+    if not params.grid.operation_history:  # If history is empty
+        return
+
+    num_ops = max(1, min(len(params.grid.operation_history), int(n * 10)))
+
+    for i in range(num_ops):
+        if i >= len(params.grid.operation_history):
+            break
+
+        positions, values, old_pos, new_pos = params.grid.operation_history[-(i + 1)]
+        current_pos = np.array(params.grid.position)
+
+        # If it was a move operation
+        if not positions and not values:
+            # Calculate and apply relative movement
+            relative_move = np.array(new_pos) - np.array(old_pos)
+            params.grid.movePosition(relative_move.tolist())
+            continue
+
+        # Otherwise handle grid changes
+        for pos, val in zip(positions, values):
+            old_center = np.mean(positions, axis=0)
+            offset = np.array(pos) - old_center
+            new_pos = tuple(int(p) for p in current_pos + offset)
+
+            if all(0 <= p < s for p, s in zip(new_pos, params.grid.grid.shape)):
+                params.grid.grid[new_pos] = val

@@ -6,6 +6,7 @@ from entropy import *
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
+
 def loadArcData(data_path):
     json_files = list(Path(data_path).rglob("*.json"))
     all_data = []
@@ -66,20 +67,19 @@ def displayGrid(grid: np.ndarray) -> None:
     elif grid.ndim == 3:
         x, y, z = np.indices(grid.shape)
         values = grid.flatten()
-        normalized_values = (values - np.min(values)) / (np.max(values) - np.min(values))
+        normalized_values = (values - np.min(values)) / (
+            np.max(values) - np.min(values)
+        )
 
-        fig = go.Figure(data=go.Scatter3d(
-            x=x.flatten(),
-            y=y.flatten(),
-            z=z.flatten(),
-            mode='markers',
-            marker=dict(
-                size=50,
-                color=values,
-                colorscale='viridis',
-                opacity=0.8
+        fig = go.Figure(
+            data=go.Scatter3d(
+                x=x.flatten(),
+                y=y.flatten(),
+                z=z.flatten(),
+                mode="markers",
+                marker=dict(size=50, color=values, colorscale="viridis", opacity=0.8),
             )
-        ))
+        )
         fig.show()
     else:
         print("Grid shape:", grid.shape)
@@ -102,4 +102,17 @@ def plotEntropy(entropy_history: List[float], target_entropy) -> None:
     plt.xlabel("Generation")
     plt.ylabel("Entropy")
     plt.legend()
+    plt.show()
+
+
+def plotOperationUsage(operation_counter):
+    plt.figure(figsize=(12, 6))
+    names = list(operation_counter.keys())
+    counts = list(operation_counter.values())
+
+    plt.bar(names, counts)
+    plt.xticks(rotation=45, ha="right")
+    plt.title("Operation Usage Count")
+    plt.ylabel("Times Used")
+    plt.tight_layout()
     plt.show()
