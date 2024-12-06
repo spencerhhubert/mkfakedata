@@ -1,9 +1,10 @@
 from pathlib import Path
 import json
+from typing import List
 import numpy as np
 from entropy import *
 import matplotlib.pyplot as plt
-
+import plotly.graph_objects as go
 
 def loadArcData(data_path):
     json_files = list(Path(data_path).rglob("*.json"))
@@ -44,26 +45,61 @@ def writeArcEntropyCalculations(arc_data):
 
 
 def displayGrid(grid: np.ndarray) -> None:
-    if grid.ndim == 2:
+    if grid.ndim == 1:
+        plt.figure(figsize=(8, 4))
+        plt.plot(grid)
+        plt.grid(True)
+        plt.show()
+    elif grid.ndim == 2:
         plt.figure(figsize=(8, 8))
-
-        # Use min/max of data for color scaling
         vmin, vmax = np.min(grid), np.max(grid)
-
-        # If all values are the same, adjust range to prevent division by zero
         if vmin == vmax:
             vmin -= 0.5
             vmax += 0.5
-
         plt.imshow(grid, cmap="viridis", vmin=vmin, vmax=vmax)
         plt.colorbar(label="Value")
-
-        # Add grid lines
         plt.grid(True, which="major", color="black", linewidth=0.5)
         plt.xticks(np.arange(-0.5, grid.shape[1], 1), [])
         plt.yticks(np.arange(-0.5, grid.shape[0], 1), [])
-
         plt.title(f"Grid Values: min={vmin:.2f}, max={vmax:.2f}")
         plt.show()
+    elif grid.ndim == 3:
+        x, y, z = np.indices(grid.shape)
+        values = grid.flatten()
+        normalized_values = (values - np.min(values)) / (np.max(values) - np.min(values))
+
+        fig = go.Figure(data=go.Scatter3d(
+            x=x.flatten(),
+            y=y.flatten(),
+            z=z.flatten(),
+            mode='markers',
+            marker=dict(
+                size=50,
+                color=values,
+                colorscale='viridis',
+                opacity=0.8
+            )
+        ))
+        fig.show()
     else:
         print("Grid shape:", grid.shape)
+
+
+def plotFitness(fitness_history: List[float]) -> None:
+    plt.figure(figsize=(10, 5))
+    plt.plot(fitness_history)
+    plt.title("Fitness Over Time")
+    plt.xlabel("Generation")
+    plt.ylabel("Fitness")
+    plt.show()
+
+
+def plotEntropy(entropy_history: List[float], target_entropy) -> None:
+    plt.figure(figsize=(10, 5))
+    plt.plot(entropy_history)
+    plt.axhline(y=target_entropy, color="r", linestyle="--", label="Target")
+    plt.title("Entropy Over Time")
+    plt.xlabel("Generation")
+    plt.ylabel("Entropy")
+    plt.legend()
+    plt.show()

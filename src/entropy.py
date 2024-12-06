@@ -18,6 +18,19 @@ def calcSampleEntropy(arr, pattern_length=2):
     return entropy(counts)
 
 
+def binaryShannonEntropy(array: np.ndarray) -> float:
+    # Convert to binary (0 and 1)
+    binary = (array != 0).astype(int)
+
+    # Count occurrences
+    unique, counts = np.unique(binary, return_counts=True)
+    probs = counts / len(binary.flatten())
+
+    # Calculate entropy (only for non-zero probabilities)
+    entropy = -np.sum([p * np.log(p) for p in probs if p > 0])
+    return entropy
+
+
 def calcApproxEntropy(arr, m=2, r=0.2):
     flattened = arr.flatten()
     std = np.std(flattened)

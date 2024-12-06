@@ -1,6 +1,7 @@
 from entropy import *
 from grid import *
 from ops import *
+from binary_ops import *
 from util import *
 from typing import List, Tuple, Callable
 import numpy as np
@@ -10,19 +11,33 @@ from tqdm import tqdm
 import time
 
 
-shape = (10, 10)
-target_entropy = 7
+shape = (10, 10, 10)
+target_entropy = 10
 
 GridOps = [
-    GridOp(propagateFromPoint, 2),
     GridOp(moveRelative, len(shape)),
-    GridOp(line, 3),
-    GridOp(fill, 2),
+    GridOp(place, 1),
     GridOp(remove, 1),
-    GridOp(moduloFill, 3),
-    GridOp(rectangle, 2),
-    GridOp(repeatNthAgo, 2),
+    GridOp(repeatLast, 0),
+    GridOp(propagateFromPoint, 2),
+    # GridOp(line, 3),
+    # GridOp(fill, 2),
+    # GridOp(moduloFill, 3),
+    # GridOp(rectangle, 2),
+    # GridOp(repeatNthAgo, 2),
 ]
+
+# playing with binary ops instead
+# GridOps = [
+#     GridOp(binaryPropagateFromPoint, 2),
+#     GridOp(moveRelative, len(shape)),  # kept original since it's movement
+#     GridOp(binaryLine, 3),
+#     GridOp(binaryFill, 2),
+#     GridOp(remove, 1),  # kept original since it just sets to 0
+#     GridOp(binaryModuloFill, 3),
+#     GridOp(binaryRectangle, 2),
+#     GridOp(repeatNthAgo, 2),  # kept original since it copies existing values
+# ]
 
 
 def decodeGenesToOperations(genes: List[float]) -> List[GridOpCall]:
@@ -58,38 +73,51 @@ def applyOperationSequence(
     return grid.grid
 
 
+def calcEntropyScore(pattern: np.ndarray, target_entropy: float) -> float:
+    current_entropy = calcShannonEntropy(pattern)
+    return 1.0 / (1.0 + abs(target_entropy - current_entropy))
+
+
+
 def calcFitness(ga_instance, solution: list, solution_idx: int) -> float:
-    # Update the progress bar for solutions if it exists
     if hasattr(ga_instance, "pbar_solutions"):
         ga_instance.pbar_solutions.update(1)
 
     operations = decodeGenesToOperations(solution)
     pattern = applyOperationSequence(shape, operations)
-    current_entropy = calcShannonEntropy(pattern)
 
-    emptiness_penalty = -2.0 if np.all(pattern == 0) or np.all(pattern == 1) else 0.0
-    base_score = 10.0 - abs(target_entropy - current_entropy)
+    entropy_score = calcEntropyScore(pattern, target_entropy)
 
-    return base_score + emptiness_penalty
+    return entropy_score  # * adjacency_score
 
 
 def runGeneticAlgorithm(
     num_genes: int = 100, num_generations: int = 200, num_solutions: int = 100
-) -> Tuple[np.ndarray, float]:
-    # Custom callback for generation completion
+) -> Tuple[np.ndarray, float, List[float], List[float]]:
+    fitness_history = []
+    entropy_history = []
+
     def on_generation(ga_instance):
         ga_instance.pbar.update(1)
-        # Reset and close solutions progress bar
         if hasattr(ga_instance, "pbar_solutions"):
             ga_instance.pbar_solutions.close()
-        # Create new solutions progress bar for next generation
         ga_instance.pbar_solutions = tqdm(
             total=num_solutions,
             desc=f"Solutions (gen {ga_instance.generations_completed + 1})",
             leave=False,
         )
 
-    # Create progress bar for generations
+        best_solution = ga_instance.best_solution()[0]
+        best_ops = decodeGenesToOperations(best_solution)
+        best_pattern = applyOperationSequence(shape, best_ops)
+        current_entropy = calcShannonEntropy(best_pattern)
+
+        fitness_history.append(ga_instance.best_solution()[1])
+        entropy_history.append(current_entropy)
+        ga_instance.pbar.set_description(
+            f"Generations (fitness: {fitness_history[-1]:.3f}, entropy: {current_entropy:.3f})"
+        )
+
     pbar = tqdm(total=num_generations, desc="Generations")
 
     ga_instance = pygad.GA(
@@ -108,27 +136,22 @@ def runGeneticAlgorithm(
         on_generation=on_generation,
     )
 
-    # Attach progress bar to instance so callback can access it
     ga_instance.pbar = pbar
-    # Create initial solutions progress bar
     ga_instance.pbar_solutions = tqdm(
         total=num_solutions, desc="Solutions (gen 1)", leave=False
     )
 
     ga_instance.run()
 
-    # Clean up progress bars
     pbar.close()
     if hasattr(ga_instance, "pbar_solutions"):
         ga_instance.pbar_solutions.close()
-
-    print(f"\nBest fitness achieved: {ga_instance.best_solution()[1]}")
 
     solution, solution_fitness, _ = ga_instance.best_solution()
     operations = decodeGenesToOperations(solution)
     best_pattern = applyOperationSequence(shape, operations)
 
-    return best_pattern, solution_fitness
+    return best_pattern, solution_fitness, fitness_history, entropy_history
 
 
 def main():
@@ -138,8 +161,10 @@ def main():
     )
     args = parser.parse_args()
 
-    pattern, fitness = runGeneticAlgorithm(100, 500)
+    pattern, fitness, fitness_history, entropy_history = runGeneticAlgorithm(500, 500)
     print(f"Best fitness: {fitness}")
+    plotFitness(fitness_history)
+    plotEntropy(entropy_history, target_entropy)
     displayGrid(pattern)
 
 

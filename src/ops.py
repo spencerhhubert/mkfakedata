@@ -163,3 +163,51 @@ def repeatNthAgo(params: GridOpParams, n_ago: float, scale: float) -> None:
 
         if all(0 <= p < s for p, s in zip(new_pos, params.grid.grid.shape)):
             params.grid.grid[new_pos] = val
+
+
+def singleFill(params: GridOpParams, should_fill: float) -> None:
+    old_grid = params.grid.grid.copy()
+    value = 1 if should_fill >= 0.5 else 0
+
+    params.grid.grid[params.grid.position] = value
+
+    changed_positions = [params.grid.position]
+    changed_values = [value]
+    params.grid.recordChange(
+        changed_positions, changed_values, params.grid.position, params.grid.position
+    )
+
+
+def place(params: GridOpParams, value: float) -> None:
+    old_grid = params.grid.grid.copy()
+    params.grid.grid[params.grid.position] = value
+
+    changed_positions = [params.grid.position]
+    changed_values = [value]
+    params.grid.recordChange(
+        changed_positions, changed_values, params.grid.position, params.grid.position
+    )
+
+
+def repeatLast(params: GridOpParams) -> None:
+    if not params.grid.operation_history:  # If history is empty
+        return
+
+    positions, values, old_pos, new_pos = params.grid.operation_history[-1]
+    current_pos = np.array(params.grid.position)
+
+    # If it was a move operation
+    if not positions and not values:
+        # Calculate and apply relative movement
+        relative_move = np.array(new_pos) - np.array(old_pos)
+        params.grid.movePosition(relative_move.tolist())
+        return
+
+    # Otherwise handle grid changes
+    for pos, val in zip(positions, values):
+        old_center = np.mean(positions, axis=0)
+        offset = np.array(pos) - old_center
+        new_pos = tuple(int(p) for p in current_pos + offset)
+
+        if all(0 <= p < s for p, s in zip(new_pos, params.grid.grid.shape)):
+            params.grid.grid[new_pos] = val
