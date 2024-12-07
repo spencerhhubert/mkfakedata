@@ -10,7 +10,7 @@ from tqdm import tqdm
 import time
 
 
-shape = (10, 10, 10)
+shape = (100, 100)
 target_entropy = 5
 gene_type = int
 operation_counter = {}
@@ -22,14 +22,14 @@ GridOps = [
     # GridOp(moveToRandomPlace, 0),
     GridOp(place, 1),
     GridOp(remove, 1),
-    GridOp(repeatLast, 0),
-    GridOp(repeatLastN, 1),
+    # GridOp(repeatLast, 0),
+    # GridOp(repeatLastN, 1),
     GridOp(rectangularFill, len(shape) + 1),
     GridOp(propagateFromPoint, 2),
     GridOp(line, 3),
     # GridOp(fill, 2),
     # GridOp(moduloFill, 3),
-    #GridOp(rectangle, 2),
+    # GridOp(rectangle, 2),
     # GridOp(repeatNthAgo, 2),
 ]
 
@@ -70,22 +70,14 @@ def printGenes(solution: list) -> None:
         print(f"{op.func.__name__}({', '.join(map(str, op_call.params))})")
 
 
-def applyOperation(grid: Grid, op_call: GridOpCall) -> None:
-    global final
-    op = GridOps[op_call.op_idx]
-    params = GridOpParams(grid)
-    op.func(params, *op_call.params)
-    op_name = op.func.__name__
-    operation_counter[op_name] = operation_counter.get(op_name, 0) + 1
-
-
 def applyOperationSequence(
     shape: Tuple[int, ...], operations: List[GridOpCall]
 ) -> np.ndarray:
-    grid = Grid(shape)
+    params = GridOpParams(Grid(shape), GridOps)
     for op_call in operations:
-        applyOperation(grid, op_call)
-    return grid.grid
+        op_name = applyOperation(params, op_call)
+        operation_counter[op_name] = operation_counter.get(op_name, 0) + 1
+    return params.grid.grid
 
 
 def calcFitness(ga_instance, solution: list, solution_idx: int) -> float:
@@ -173,8 +165,6 @@ def runGeneticAlgorithm(
     solution, solution_fitness, _ = ga_instance.best_solution()
     printGenes(solution)
     operations = decodeGenesToOperations(solution)
-    global final
-    final = True
     best_pattern = applyOperationSequence(shape, operations)
 
     return best_pattern, solution_fitness, fitness_history, entropy_history
