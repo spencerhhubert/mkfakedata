@@ -14,12 +14,12 @@ def noOp(params: GridOpParams) -> None:
 
 
 def moveRelative(params: GridOpParams, *deltas: float) -> None:
-    params.grid.movePosition(list(deltas))
+    params.grid.move(list(deltas))
 
 
 def moveToRandomPlace(params: GridOpParams) -> None:
     new_position = [np.random.randint(0, s) for s in params.grid.grid.shape]
-    params.grid.movePosition(new_position)
+    params.grid.move(new_position)
 
 
 def propagateFromPoint(params: GridOpParams, strength: float, value: float) -> None:
@@ -35,7 +35,7 @@ def propagateFromPoint(params: GridOpParams, strength: float, value: float) -> N
 
     changed_positions = list(zip(*np.where(old_grid != params.grid.grid)))
     changed_values = [params.grid.grid[pos] for pos in changed_positions]
-    params.grid.recordChange(
+    params.grid.record(
         changed_positions, changed_values, params.grid.position, params.grid.position
     )
 
@@ -60,7 +60,7 @@ def line(params: GridOpParams, direction: float, value: float, length: float) ->
 
     changed_positions = list(zip(*np.where(old_grid != params.grid.grid)))
     changed_values = [params.grid.grid[pos] for pos in changed_positions]
-    params.grid.recordChange(
+    params.grid.record(
         changed_positions, changed_values, params.grid.position, params.grid.position
     )
 
@@ -78,7 +78,7 @@ def circularFill(params: GridOpParams, radius: float, value: float) -> None:
 
     changed_positions = list(zip(*np.where(old_grid != params.grid.grid)))
     changed_values = [params.grid.grid[pos] for pos in changed_positions]
-    params.grid.recordChange(
+    params.grid.record(
         changed_positions, changed_values, params.grid.position, params.grid.position
     )
 
@@ -104,7 +104,7 @@ def rectangularFill(params: GridOpParams, value: float, *sizes: float) -> None:
 
     changed_positions = list(zip(*np.where(old_grid != params.grid.grid)))
     changed_values = [params.grid.grid[pos] for pos in changed_positions]
-    params.grid.recordChange(
+    params.grid.record(
         changed_positions, changed_values, params.grid.position, params.grid.position
     )
 
@@ -122,7 +122,7 @@ def remove(params: GridOpParams, radius: float) -> None:
 
     changed_positions = list(zip(*np.where(old_grid != params.grid.grid)))
     changed_values = [params.grid.grid[pos] for pos in changed_positions]
-    params.grid.recordChange(
+    params.grid.record(
         changed_positions, changed_values, params.grid.position, params.grid.position
     )
 
@@ -145,7 +145,7 @@ def moduloFill(
 
     changed_positions = list(zip(*np.where(old_grid != params.grid.grid)))
     changed_values = [params.grid.grid[pos] for pos in changed_positions]
-    params.grid.recordChange(
+    params.grid.record(
         changed_positions, changed_values, params.grid.position, params.grid.position
     )
 
@@ -165,7 +165,7 @@ def rectangle(params: GridOpParams, size: float, value: float) -> None:
 
     changed_positions = list(zip(*np.where(old_grid != params.grid.grid)))
     changed_values = [params.grid.grid[pos] for pos in changed_positions]
-    params.grid.recordChange(
+    params.grid.record(
         changed_positions, changed_values, params.grid.position, params.grid.position
     )
 
@@ -187,7 +187,7 @@ def repeatNthAgo(params: GridOpParams, n_ago: float, scale: float) -> None:
         # Calculate and apply relative movement
         relative_move = np.array(new_pos) - np.array(old_pos)
         new_position = current_pos + (relative_move * scale)
-        params.grid.movePosition([d * scale for d in relative_move])
+        params.grid.move([d * scale for d in relative_move])
         return
 
     # Otherwise handle grid changes
@@ -208,7 +208,7 @@ def singleFill(params: GridOpParams, should_fill: float) -> None:
 
     changed_positions = [params.grid.position]
     changed_values = [value]
-    params.grid.recordChange(
+    params.grid.record(
         changed_positions, changed_values, params.grid.position, params.grid.position
     )
 
@@ -219,7 +219,7 @@ def place(params: GridOpParams, value: float) -> None:
 
     changed_positions = [params.grid.position]
     changed_values = [value]
-    params.grid.recordChange(
+    params.grid.record(
         changed_positions, changed_values, params.grid.position, params.grid.position
     )
 
@@ -235,7 +235,7 @@ def repeatLast(params: GridOpParams) -> None:
     if not positions and not values:
         # Calculate and apply relative movement
         relative_move = np.array(new_pos) - np.array(old_pos)
-        params.grid.movePosition(relative_move.tolist())
+        params.grid.move(relative_move.tolist())
         return
 
     # Otherwise handle grid changes
@@ -265,7 +265,7 @@ def repeatLastN(params: GridOpParams, n: float) -> None:
         if not positions and not values:
             # Calculate and apply relative movement
             relative_move = np.array(new_pos) - np.array(old_pos)
-            params.grid.movePosition(relative_move.tolist())
+            params.grid.move(relative_move.tolist())
             continue
 
         # Otherwise handle grid changes

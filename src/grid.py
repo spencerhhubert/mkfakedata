@@ -16,7 +16,7 @@ class Grid:
         # Track both grid changes and position changes
         self.operation_history = []  # List of (positions_changed, values_changed, old_pos, new_pos)
 
-    def recordChange(
+    def record(
         self,
         changed_positions: List[Tuple[int, ...]],
         changed_values: List[float],
@@ -29,7 +29,7 @@ class Grid:
         if len(self.operation_history) > 10:
             self.operation_history.pop(0)
 
-    def movePosition(self, deltas: List[float]):
+    def move(self, deltas: List[float]):
         old_position = self.position
         new_pos = []
         for i, (p, d, s) in enumerate(zip(self.position, deltas, self.grid.shape)):
@@ -39,7 +39,7 @@ class Grid:
             new_pos.append(new_p)
         self.position = tuple(new_pos)
         # Record position change with empty grid changes
-        self.recordChange([], [], old_position, self.position)
+        self.record([], [], old_position, self.position)
 
 
 class GridOpParams:
