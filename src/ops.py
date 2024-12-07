@@ -9,6 +9,10 @@ import time
 from grid import *
 
 
+def noOp(params: GridOpParams) -> None:
+    pass
+
+
 def moveRelative(params: GridOpParams, *deltas: float) -> None:
     params.grid.movePosition(list(deltas))
 

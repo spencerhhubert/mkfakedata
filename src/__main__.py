@@ -10,27 +10,21 @@ from tqdm import tqdm
 import time
 
 
-shape = (10, 10)
+shape = (10, 10, 10)
 target_entropy = 5
-max_gene_value = 100
-min_gene_value = 0
 gene_type = int
 operation_counter = {}
-
-
-def noOp(params: GridOpParams) -> None:
-    pass
 
 
 GridOps = [
     GridOp(noOp, 0),
     GridOp(moveRelative, len(shape)),
-    GridOp(moveToRandomPlace, 0),
+    # GridOp(moveToRandomPlace, 0),
     GridOp(place, 1),
     # GridOp(remove, 1),
-    GridOp(repeatLast, 0),
+    # GridOp(repeatLast, 0),
     GridOp(repeatLastN, 1),
-    GridOp(rectangularFill, len(shape) + 1),
+    # GridOp(rectangularFill, len(shape) + 1),
     # GridOp(propagateFromPoint, 2),
     # GridOp(line, 3),
     # GridOp(fill, 2),
@@ -38,6 +32,9 @@ GridOps = [
     # GridOp(rectangle, 2),
     # GridOp(repeatNthAgo, 2),
 ]
+
+max_gene_value = 10
+min_gene_value = 0
 
 
 def decodeGenesToOperations(genes: List[float]) -> List[GridOpCall]:
@@ -65,11 +62,19 @@ def decodeGenesToOperations(genes: List[float]) -> List[GridOpCall]:
     return ops
 
 
+def printGenes(solution: list) -> None:
+    print("\nOptimal Solution Operations:")
+    operations = decodeGenesToOperations(solution)
+    for op_call in operations:
+        op = GridOps[op_call.op_idx]
+        print(f"{op.func.__name__}({', '.join(map(str, op_call.params))})")
+
+
 def applyOperation(grid: Grid, op_call: GridOpCall) -> None:
+    global final
     op = GridOps[op_call.op_idx]
     params = GridOpParams(grid)
     op.func(params, *op_call.params)
-
     op_name = op.func.__name__
     operation_counter[op_name] = operation_counter.get(op_name, 0) + 1
 
@@ -91,7 +96,10 @@ def calcFitness(ga_instance, solution: list, solution_idx: int) -> float:
     pattern = applyOperationSequence(shape, operations)
     current_entropy = calcShannonEntropy(pattern)
     entropy_score = 1.0 / (1.0 + abs(target_entropy - current_entropy))
-    total_score = 1 * entropy_score
+
+    noop_count = sum(1 for op in operations if op.op_idx == 0)
+    operation_penalty = noop_count / len(operations) if operations else 1.0
+    total_score = entropy_score * (1 - operation_penalty)
 
     # Initialize logging dict if it doesn't exist
     if not hasattr(ga_instance, "logging"):
@@ -111,7 +119,7 @@ def calcFitness(ga_instance, solution: list, solution_idx: int) -> float:
 
 
 def runGeneticAlgorithm(
-    num_genes: int = 100, num_generations: int = 200, num_solutions: int = 100
+    num_genes: int, num_generations: int, num_solutions: int, parents_mating: int
 ) -> Tuple[np.ndarray, float, List[float], List[float]]:
     fitness_history = []
     entropy_history = []
@@ -137,7 +145,7 @@ def runGeneticAlgorithm(
 
     ga_instance = pygad.GA(
         num_generations=num_generations,
-        num_parents_mating=4,
+        num_parents_mating=parents_mating,
         num_genes=num_genes,
         init_range_low=min_gene_value,
         init_range_high=max_gene_value,
@@ -163,7 +171,10 @@ def runGeneticAlgorithm(
         ga_instance.pbar_solutions.close()
 
     solution, solution_fitness, _ = ga_instance.best_solution()
+    printGenes(solution)
     operations = decodeGenesToOperations(solution)
+    global final
+    final = True
     best_pattern = applyOperationSequence(shape, operations)
 
     return best_pattern, solution_fitness, fitness_history, entropy_history
@@ -174,19 +185,23 @@ def main():
     parser.add_argument(
         "--arc", dest="arc_data_path", required=False, help="Path to ARC data"
     )
+    parser.add_argument("--generations", type=int, default=100)
     parser.add_argument(
-        "--generations", type=int, default=100, help="Number of generations to run"
+        "--genes",
+        type=int,
+        default=10000,  # lots of genes relative to generations
     )
-    parser.add_argument(
-        "--genes", type=int, default=200, help="Number of genes per solution"
-    )
+    parser.add_argument("--solutions", type=int, default=100)
+    parser.add_argument("--parents", type=int, default=100)
     args = parser.parse_args()
 
     generations = args.generations
     genes = args.genes
+    solutions = args.solutions
+    parents = args.parents
 
     pattern, fitness, fitness_history, entropy_history = runGeneticAlgorithm(
-        genes, generations
+        genes, generations, solutions, parents
     )
     plotFitness(fitness_history)
     plotEntropy(entropy_history, target_entropy)

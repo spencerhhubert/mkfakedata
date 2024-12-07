@@ -12,6 +12,7 @@ class Grid:
     def __init__(self, shape: Tuple[int, ...]):
         self.grid = np.zeros(shape)
         self.position = tuple(np.random.randint(0, s) for s in shape)
+        # self.position = tuple(s // 2 for s in shape)
         # Track both grid changes and position changes
         self.operation_history = []  # List of (positions_changed, values_changed, old_pos, new_pos)
 
@@ -32,8 +33,10 @@ class Grid:
         old_position = self.position
         new_pos = []
         for i, (p, d, s) in enumerate(zip(self.position, deltas, self.grid.shape)):
-            new_p = int(p + d * s)  # Scale movement by dimension size
-            new_pos.append(min(max(0, new_p), s - 1))
+            # new_p = int(p + d * s)  # Scale movement by dimension size
+            new_p = int(p + d)  # dont scale if ints
+            new_p = new_p % s  # Wrap around using modulo
+            new_pos.append(new_p)
         self.position = tuple(new_pos)
         # Record position change with empty grid changes
         self.recordChange([], [], old_position, self.position)
