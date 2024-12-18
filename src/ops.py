@@ -9,10 +9,11 @@ import time
 from grid import *
 
 
-def applyOperation(params: GridOpParams, op_call: GridOpCall) -> str:
+def applyOperation(params: GridOpParams, op_call: GridOpCall, record: bool) -> str:
     op = params.grid_ops[op_call.op_idx]
     op.func(params, *op_call.params)
-    params.grid.operation_history.append(op_call)
+    if record:
+        params.grid.history.append(op_call)
     op_name = op.func.__name__
     return op_name
 
@@ -40,17 +41,33 @@ def propagateFromPoint(params: GridOpParams, strength: float, value: float) -> N
     params.grid.grid[mask] = value
 
 
-def line(params: GridOpParams, direction: float, value: float, length: float) -> None:
-    ndims = len(params.grid.position)
-    dim_idx = int(direction * ndims) % ndims
-    step_sign = 1 if direction * ndims % 1 < 0.5 else -1
-    max_len = params.grid.grid.shape[dim_idx]
-    actual_length = int(length * max_len)
-    for i in range(actual_length):
-        pos = list(params.grid.position)
-        pos[dim_idx] = (pos[dim_idx] + i * step_sign) % params.grid.grid.shape[dim_idx]
-        if all(0 <= p < s for p, s in zip(pos, params.grid.grid.shape)):
-            params.grid.grid[tuple(pos)] = value
+def line(params: GridOpParams, value: float, *deltas: float) -> None:
+    # Convert deltas to target position
+    target_pos = []
+    for p, d, s in zip(params.grid.position, deltas, params.grid.grid.shape):
+        new_p = int(p + d) % s
+        target_pos.append(new_p)
+    target_pos = tuple(target_pos)
+
+    # Get coordinates as arrays
+    start = np.array(params.grid.position)
+    end = np.array(target_pos)
+
+    # Calculate number of points needed
+    distance = np.max(np.abs(end - start))
+    if distance == 0:
+        return
+
+    # Create evenly spaced points along line
+    t = np.linspace(0, 1, int(distance) + 1)
+    points = np.array([start[None,:] * (1-t)[:,None] + end[None,:] * t[:,None]], dtype=int)
+    points = points.reshape(-1, len(start))
+
+    # Handle wrapping
+    points = points % params.grid.grid.shape
+
+    # Set all points to the specified value
+    params.grid.grid[tuple(points.T)] = value
 
 
 def rectangularFill(params: GridOpParams, value: float, *sizes: float) -> None:
@@ -111,18 +128,40 @@ def place(params: GridOpParams, value: float) -> None:
 
 
 def repeatLast(params: GridOpParams) -> None:
-    if not params.grid.operation_history:
+    if len(params.grid.history) < 2:
         return
-    last_op = params.grid.operation_history[-1]
-    applyOperation(params, last_op)
+    # Temporarily set a shorter history when calling applyOperation
+    original_history = params.grid.history
+    params.grid.history = params.grid.history[:-1]
+
+    last_op = params.grid.history[-1]
+    applyOperation(params, last_op, False)
+
+    # Restore the full history
+    params.grid.history = original_history
 
 
 def repeatLastN(params: GridOpParams, n: float) -> None:
-    if not params.grid.operation_history:
+    if len(params.grid.history) < 2:
         return
-    num_ops = max(1, min(len(params.grid.operation_history), int(n * 10)))
+
+    if isinstance(n, float):
+        num_ops = max(1, min(len(params.grid.history) - 1, int(n * 10)))
+    else:
+        num_ops = max(1, min(len(params.grid.history) - 1, n))
+
+    # Temporarily set a shorter history
+    original_history = params.grid.history
+    params.grid.history = params.grid.history[:-1]
+
+    # Get the last N ops from the shortened history
     for i in range(num_ops):
-        if i >= len(params.grid.operation_history):
+        if i >= len(params.grid.history):
             break
-        op = params.grid.operation_history[-(num_ops - i)]
-        applyOperation(params, op)
+        op = params.grid.history[-(num_ops - i)]
+        if params.grid_ops[op.op_idx].func.__name__ == "repeatLastN":
+            continue
+        applyOperation(params, op, False)
+
+    # Restore the full history
+    params.grid.history = original_history

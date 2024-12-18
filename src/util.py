@@ -45,44 +45,53 @@ def writeArcEntropyCalculations(arc_data):
         json.dump(entropy_data, f, indent=2)
 
 
-def displayGrid(grid: np.ndarray) -> None:
-    if grid.ndim == 1:
-        plt.figure(figsize=(8, 4))
-        plt.plot(grid)
-        plt.grid(True)
+def displayGrids(grids: List[np.ndarray]) -> None:
+    ndim = grids[0].ndim
+    if ndim == 1:
+        plt.figure(figsize=(8 * len(grids), 4))
+        for i, grid in enumerate(grids):
+            plt.subplot(1, len(grids), i + 1)
+            plt.plot(grid)
+            plt.grid(True)
         plt.show()
-    elif grid.ndim == 2:
-        plt.figure(figsize=(8, 8))
-        vmin, vmax = np.min(grid), np.max(grid)
+    elif ndim == 2:
+        num_grids = len(grids)
+        rows = int(np.ceil(np.sqrt(num_grids)))
+        cols = int(np.ceil(num_grids / rows))
+        plt.figure(figsize=(8 * cols, 8 * rows))
+        vmin = min(np.min(g) for g in grids)
+        vmax = max(np.max(g) for g in grids)
         if vmin == vmax:
             vmin -= 0.5
             vmax += 0.5
-        plt.imshow(grid, cmap="viridis", vmin=vmin, vmax=vmax)
-        plt.colorbar(label="Value")
-        plt.grid(True, which="major", color="black", linewidth=0.5)
-        plt.xticks(np.arange(-0.5, grid.shape[1], 1), [])
-        plt.yticks(np.arange(-0.5, grid.shape[0], 1), [])
-        plt.title(f"Grid Values: min={vmin:.2f}, max={vmax:.2f}")
+        for i, grid in enumerate(grids):
+            plt.subplot(rows, cols, i + 1)
+            plt.imshow(grid, cmap="viridis", vmin=vmin, vmax=vmax)
+            plt.grid(True, which="major", color="black", linewidth=0.5)
+            plt.xticks(np.arange(-0.5, grid.shape[1], 1), [])
+            plt.yticks(np.arange(-0.5, grid.shape[0], 1), [])
         plt.show()
-    elif grid.ndim == 3:
-        x, y, z = np.indices(grid.shape)
-        values = grid.flatten()
-        normalized_values = (values - np.min(values)) / (
-            np.max(values) - np.min(values)
-        )
-
-        fig = go.Figure(
-            data=go.Scatter3d(
-                x=x.flatten(),
-                y=y.flatten(),
-                z=z.flatten(),
-                mode="markers",
-                marker=dict(size=50, color=values, colorscale="viridis", opacity=0.8),
+    elif ndim == 3:
+        for i, grid in enumerate(grids):
+            if i > 2: break
+            x, y, z = np.indices(grid.shape)
+            values = grid.flatten()
+            normalized_values = (values - np.min(values)) / (
+                np.max(values) - np.min(values)
             )
-        )
-        fig.show()
+            fig = go.Figure(
+                data=go.Scatter3d(
+                    x=x.flatten(),
+                    y=y.flatten(),
+                    z=z.flatten(),
+                    mode="markers",
+                    marker=dict(size=50, color=values, colorscale="viridis", opacity=0.8),
+                )
+            )
+            fig.show()
     else:
-        print("Grid shape:", grid.shape)
+        for i, grid in enumerate(grids):
+            print(f"Grid {i+1} shape:", grid.shape)
 
 
 def plotFitness(fitness_history: List[float]) -> None:

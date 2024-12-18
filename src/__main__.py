@@ -10,7 +10,7 @@ from tqdm import tqdm
 import time
 
 
-shape = (100, 100)
+shape = (10, 10)
 target_entropy = 5
 gene_type = int
 operation_counter = {}
@@ -22,16 +22,18 @@ GridOps = [
     # GridOp(moveToRandomPlace, 0),
     GridOp(place, 1),
     GridOp(remove, 1),
-    # GridOp(repeatLast, 0),
-    # GridOp(repeatLastN, 1),
+    GridOp(repeatLast, 0),
+    GridOp(repeatLastN, 1),
     GridOp(rectangularFill, len(shape) + 1),
     GridOp(propagateFromPoint, 2),
-    GridOp(line, 3),
+    GridOp(line, len(shape) + 1),
     # GridOp(fill, 2),
     # GridOp(moduloFill, 3),
     # GridOp(rectangle, 2),
     # GridOp(repeatNthAgo, 2),
 ]
+
+max_params = max(op.param_count for op in GridOps)
 
 max_gene_value = 10
 min_gene_value = 0
@@ -40,25 +42,19 @@ min_gene_value = 0
 def decodeGenesToOperations(genes: List[float]) -> List[GridOpCall]:
     ops = []
     i = 0
-    while i < len(genes):
+    while i + max_params < len(genes):
         if gene_type == int:
-            # Direct index selection, use noop (index 0) if out of range
             op_idx = genes[i] if 0 <= genes[i] < len(GridOps) else 0
         else:
-            # Original normalization method
             op_idx = int(genes[i] * len(GridOps))
             op_idx = max(0, min(op_idx, len(GridOps) - 1))
 
-        i += 1
-        num_params = GridOps[op_idx].param_count
-
-        if i + num_params > len(genes):
-            break
-
-        params = genes[i : i + num_params]
-        i += num_params
-
+        # Only take the number of parameters this operation needs
+        needed_params = GridOps[op_idx].param_count
+        params = genes[i + 1:i + 1 + needed_params]
         ops.append(GridOpCall(op_idx, params))
+        i += 1 + max_params
+
     return ops
 
 
@@ -75,7 +71,7 @@ def applyOperationSequence(
 ) -> np.ndarray:
     params = GridOpParams(Grid(shape), GridOps)
     for op_call in operations:
-        op_name = applyOperation(params, op_call)
+        op_name = applyOperation(params, op_call, True)
         operation_counter[op_name] = operation_counter.get(op_name, 0) + 1
     return params.grid.grid
 
@@ -112,7 +108,7 @@ def calcFitness(ga_instance, solution: list, solution_idx: int) -> float:
 
 def runGeneticAlgorithm(
     num_genes: int, num_generations: int, num_solutions: int, parents_mating: int
-) -> Tuple[np.ndarray, float, List[float], List[float]]:
+) -> Tuple[List[np.ndarray], float, List[float], List[float]]:
     fitness_history = []
     entropy_history = []
 
@@ -144,9 +140,12 @@ def runGeneticAlgorithm(
         fitness_func=calcFitness,
         sol_per_pop=num_solutions,
         gene_type=gene_type,
-        mutation_percent_genes=20,
+        parent_selection_type="tournament",
+        mutation_probability=0.01,
+        mutation_percent_genes=10,
         mutation_type="random",
-        crossover_type="two_points",
+        crossover_type="single_point",
+        crossover_probability=0.8,
         keep_parents=4,
         on_generation=on_generation,
     )
@@ -165,9 +164,9 @@ def runGeneticAlgorithm(
     solution, solution_fitness, _ = ga_instance.best_solution()
     printGenes(solution)
     operations = decodeGenesToOperations(solution)
-    best_pattern = applyOperationSequence(shape, operations)
+    patterns = [applyOperationSequence(shape, operations) for _ in range(10)]
 
-    return best_pattern, solution_fitness, fitness_history, entropy_history
+    return patterns, solution_fitness, fitness_history, entropy_history
 
 
 def main():
@@ -175,14 +174,14 @@ def main():
     parser.add_argument(
         "--arc", dest="arc_data_path", required=False, help="Path to ARC data"
     )
-    parser.add_argument("--generations", type=int, default=100)
+    parser.add_argument("--generations", type=int, default=1000)
     parser.add_argument(
         "--genes",
         type=int,
-        default=10000,  # lots of genes relative to generations
+        default=20000,
     )
-    parser.add_argument("--solutions", type=int, default=100)
-    parser.add_argument("--parents", type=int, default=100)
+    parser.add_argument("--solutions", type=int, default=50)
+    parser.add_argument("--parents", type=int, default=4)
     args = parser.parse_args()
 
     generations = args.generations
@@ -190,13 +189,13 @@ def main():
     solutions = args.solutions
     parents = args.parents
 
-    pattern, fitness, fitness_history, entropy_history = runGeneticAlgorithm(
+    patterns, fitness, fitness_history, entropy_history = runGeneticAlgorithm(
         genes, generations, solutions, parents
     )
     plotFitness(fitness_history)
     plotEntropy(entropy_history, target_entropy)
     plotOperationUsage(operation_counter)
-    displayGrid(pattern)
+    displayGrids(patterns)
 
 
 if __name__ == "__main__":

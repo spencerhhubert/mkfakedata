@@ -26,7 +26,7 @@ class Grid:
         self.position = tuple(np.random.randint(0, s) for s in shape)
         # self.position = tuple(s // 2 for s in shape)
         # Track both grid changes and position changes
-        self.operation_history = []  # List of (positions_changed, values_changed, old_pos, new_pos)
+        self.history = []  # List of (positions_changed, values_changed, old_pos, new_pos)
 
     def move(self, deltas: List[float]):
         self.position = tuple(
