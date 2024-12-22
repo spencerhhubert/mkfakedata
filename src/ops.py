@@ -165,3 +165,35 @@ def repeatLastN(params: GridOpParams, n: float) -> None:
 
     # Restore the full history
     params.grid.history = original_history
+
+
+def reflect(params: GridOpParams, axis: float) -> None:
+    num_axes = len(params.grid.grid.shape)
+    axis_idx = int(axis * num_axes) % num_axes
+    params.grid.grid = np.flip(params.grid.grid, axis=axis_idx)
+
+
+def rotate(params: GridOpParams, k: float, axis1: float, axis2: float) -> None:
+    num_axes = len(params.grid.grid.shape)
+    if num_axes < 2:
+        # Not enough dimensions to perform rotation
+        return
+
+    # Get axis indices from axis1 and axis2 parameters
+    axis1_idx = int(axis1 * num_axes) % num_axes
+
+    # Create a list of possible axes excluding axis1_idx
+    remaining_axes = list(range(num_axes))
+    remaining_axes.remove(axis1_idx)
+
+    # Map axis2 to one of the remaining axes
+    axis2_idx = int(axis2 * (num_axes - 1)) % (num_axes - 1)
+    axis2_idx = remaining_axes[axis2_idx]
+
+    # Ensure rotation steps k is between 1 and 4 (90-degree increments)
+    k = int(k * 4) % 4
+    if k == 0:
+        k = 1  # Rotate at least once
+
+    # Perform the rotation
+    params.grid.grid = np.rot90(params.grid.grid, k=k, axes=(axis1_idx, axis2_idx))

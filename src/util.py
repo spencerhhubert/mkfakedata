@@ -58,7 +58,10 @@ def displayGrids(grids: List[np.ndarray]) -> None:
         num_grids = len(grids)
         rows = int(np.ceil(np.sqrt(num_grids)))
         cols = int(np.ceil(num_grids / rows))
-        plt.figure(figsize=(8 * cols, 8 * rows))
+        # Scale figure size based on number of grids, but cap at reasonable screen dimensions
+        fig_width = min(16, 2 * cols)
+        fig_height = min(9, 2 * rows)
+        plt.figure(figsize=(fig_width, fig_height))
         vmin = min(np.min(g) for g in grids)
         vmax = max(np.max(g) for g in grids)
         if vmin == vmax:
@@ -70,6 +73,7 @@ def displayGrids(grids: List[np.ndarray]) -> None:
             plt.grid(True, which="major", color="black", linewidth=0.5)
             plt.xticks(np.arange(-0.5, grid.shape[1], 1), [])
             plt.yticks(np.arange(-0.5, grid.shape[0], 1), [])
+        plt.tight_layout()
         plt.show()
     elif ndim == 3:
         for i, grid in enumerate(grids):

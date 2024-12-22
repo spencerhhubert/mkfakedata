@@ -11,7 +11,9 @@ import time
 
 
 shape = (10, 10)
-target_entropy = 5
+target_entropy = 0.5
+target_density = 10
+target_components = 100
 gene_type = int
 operation_counter = {}
 
@@ -21,16 +23,18 @@ GridOps = [
     GridOp(moveRelative, len(shape)),
     # GridOp(moveToRandomPlace, 0),
     GridOp(place, 1),
-    GridOp(remove, 1),
-    GridOp(repeatLast, 0),
+    # GridOp(remove, 1),
+    # GridOp(repeatLast, 0),
     GridOp(repeatLastN, 1),
-    GridOp(rectangularFill, len(shape) + 1),
-    GridOp(propagateFromPoint, 2),
-    GridOp(line, len(shape) + 1),
+    # GridOp(rectangularFill, len(shape) + 1),
+    # GridOp(propagateFromPoint, 2),
+    # GridOp(line, len(shape) + 1),
     # GridOp(fill, 2),
     # GridOp(moduloFill, 3),
     # GridOp(rectangle, 2),
     # GridOp(repeatNthAgo, 2),
+    # GridOp(reflect, 1)
+    # GridOp(rotate, 3)
 ]
 
 max_params = max(op.param_count for op in GridOps)
@@ -77,33 +81,62 @@ def applyOperationSequence(
 
 
 def calcFitness(ga_instance, solution: list, solution_idx: int) -> float:
-    if hasattr(ga_instance, "pbar_solutions"):
-        ga_instance.pbar_solutions.update(1)
+    try:
+        # Generate pattern from solution
+        operations = decodeGenesToOperations(solution)
+        pattern = applyOperationSequence(shape, operations)
 
-    operations = decodeGenesToOperations(solution)
-    pattern = applyOperationSequence(shape, operations)
-    current_entropy = calcShannonEntropy(pattern)
-    entropy_score = 1.0 / (1.0 + abs(target_entropy - current_entropy))
+        # Entropy calculation using target_entropy
+        shannon_entropy = calcShannonEntropy(pattern)
+        entropy_diff = abs(target_entropy - shannon_entropy)
+        entropy_score = 1 / (1 + entropy_diff)
 
-    noop_count = sum(1 for op in operations if op.op_idx == 0)
-    operation_penalty = noop_count / len(operations) if operations else 1.0
-    total_score = entropy_score * (1 - operation_penalty)
+        # Density calculation
+        non_zero_count = np.count_nonzero(pattern)
+        density = non_zero_count / pattern.size
+        density_diff = abs(target_density - density)
+        density_score = 1 / (1 + density_diff)
 
-    # Initialize logging dict if it doesn't exist
-    if not hasattr(ga_instance, "logging"):
-        ga_instance.logging = {}
+        # Count connected components (works for any dimension)
+        num_components = countConnectedComponents(pattern)
+        components_diff = abs(target_components - num_components)
+        components_score = 1 / (1 + components_diff)
 
-    # Update if this is the best score we've seen
-    if not ga_instance.logging or total_score > ga_instance.logging.get(
-        "fitness", -float("inf")
-    ):
-        ga_instance.logging = {
-            "pattern": pattern,
-            "entropy": current_entropy,
-            "fitness": total_score,
-        }
+        # Diversity score (number of unique values)
+        num_unique_values = len(np.unique(pattern))
+        max_possible_values = max(pattern.size, 1)  # Avoid division by zero
+        diversity_score = num_unique_values / max_possible_values
 
-    return total_score
+        # Weights for different metrics
+        entropy_weight = 0.5
+        density_weight = 0.2
+        components_weight = 0.2
+        diversity_weight = 0.1
+
+        # Combine scores with weights
+        fitness = (
+            entropy_weight * entropy_score +
+            density_weight * density_score +
+            components_weight * components_score +
+            diversity_weight * diversity_score
+        )
+
+        # Total score without operation penalty
+        total_score = fitness
+
+        # Optionally, update logging
+        if not hasattr(ga_instance, "logging") or total_score > ga_instance.logging.get("fitness", -float("inf")):
+            ga_instance.logging = {
+                "pattern": pattern,
+                "entropy": shannon_entropy,
+                "fitness": total_score,
+            }
+
+        return total_score
+    except Exception as e:
+        print(f"Error in fitness function for solution {solution_idx}: {e}")
+        return -np.inf
+
 
 
 def runGeneticAlgorithm(
@@ -162,7 +195,7 @@ def runGeneticAlgorithm(
         ga_instance.pbar_solutions.close()
 
     solution, solution_fitness, _ = ga_instance.best_solution()
-    printGenes(solution)
+    # printGenes(solution)
     operations = decodeGenesToOperations(solution)
     patterns = [applyOperationSequence(shape, operations) for _ in range(10)]
 
@@ -174,27 +207,30 @@ def main():
     parser.add_argument(
         "--arc", dest="arc_data_path", required=False, help="Path to ARC data"
     )
-    parser.add_argument("--generations", type=int, default=1000)
+    parser.add_argument("--generations", type=int, default=500)
     parser.add_argument(
         "--genes",
         type=int,
-        default=20000,
+        default=2000,
     )
     parser.add_argument("--solutions", type=int, default=50)
     parser.add_argument("--parents", type=int, default=4)
+    global target_entropy
+    parser.add_argument("--entropy", type=float, default=target_entropy)
     args = parser.parse_args()
 
     generations = args.generations
     genes = args.genes
     solutions = args.solutions
     parents = args.parents
+    target_entropy = args.entropy
 
     patterns, fitness, fitness_history, entropy_history = runGeneticAlgorithm(
         genes, generations, solutions, parents
     )
     plotFitness(fitness_history)
-    plotEntropy(entropy_history, target_entropy)
-    plotOperationUsage(operation_counter)
+    # plotEntropy(entropy_history, target_entropy)
+    # plotOperationUsage(operation_counter)
     displayGrids(patterns)
 
 
